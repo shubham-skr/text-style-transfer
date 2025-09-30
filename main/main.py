@@ -145,22 +145,41 @@ def main(args):
     config.label_smoothing_factor = args.label_smoothing_factor #0.05
     
     model.config = config
-    
-    # Initialize training arguments
+
+    # Define a directory to save the model
+    output_directory = "./results" 
+
+    # Initialize training arguments correctly
     training_args = Seq2SeqTrainingArguments(
-        args.model_name,
-        evaluation_strategy="epoch",
-        learning_rate=args.learning_rate,
-        per_device_train_batch_size=args.batch_size,
-        per_device_eval_batch_size=args.batch_size,
-        weight_decay=args.weight_decay,
-        save_total_limit=1,
-        save_strategy='epoch',
-        load_best_model_at_end=True,
-        num_train_epochs=args.num_train_epochs,
-        predict_with_generate=True,
-        fp16=True
+      output_dir=output_directory,         # Explicitly name the output directory
+      eval_strategy="epoch",         # This is correct for recent versions
+      learning_rate=args.learning_rate,
+      per_device_train_batch_size=args.batch_size,
+      per_device_eval_batch_size=args.batch_size,
+      weight_decay=args.weight_decay,
+      save_total_limit=1,
+      save_strategy='epoch',               # Note: save_strategy often aligns with evaluation_strategy
+      load_best_model_at_end=True,
+      num_train_epochs=args.num_train_epochs,
+      predict_with_generate=True,
+      fp16=True
     )
+    
+    # # Initialize training arguments
+    # training_args = Seq2SeqTrainingArguments(
+    #     args.model_name,
+    #     evaluation_strategy="epoch",
+    #     learning_rate=args.learning_rate,
+    #     per_device_train_batch_size=args.batch_size,
+    #     per_device_eval_batch_size=args.batch_size,
+    #     weight_decay=args.weight_decay,
+    #     save_total_limit=1,
+    #     save_strategy='epoch',
+    #     load_best_model_at_end=True,
+    #     num_train_epochs=args.num_train_epochs,
+    #     predict_with_generate=True,
+    #     fp16=True
+    # )
 
     # Train the model
     train_model(model, train_dataset, dev_dataset, tokenizer, training_args)
