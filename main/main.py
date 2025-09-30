@@ -20,7 +20,7 @@ from automatic_eval import AutomaticEvaluator
 def set_seed(seed_value):
     random.seed(seed_value)
     np.random.seed(seed_value)
-    pd.np.random.seed(seed_value)
+    np.random.seed(seed_value)
     torch.manual_seed(seed_value)
     torch.cuda.manual_seed(seed_value)
     torch.cuda.manual_seed_all(seed_value)
