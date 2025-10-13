@@ -7,6 +7,10 @@ from sklearn.model_selection import train_test_split
 import pickle
 import argparse
 import torch
+import math
+import sacrebleu
+from tqdm import tqdm
+from scipy.stats.mstats import gmean
 from transformers import (
     BartTokenizer,
     BartForConditionalGeneration,
@@ -15,7 +19,6 @@ from transformers import (
     DataCollatorForSeq2Seq,
     BartConfig
 )
-from types import SimpleNamespace
 
 
 def set_seed(seed_value):
@@ -84,6 +87,25 @@ class CreateDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.labels['input_ids'])
+
+
+def generate_synthetic_data(model, unparallel_data, src_col, tokenizer, synthetic_train_file):
+    print(f"🔄 Generating synthetic train data from unparallel data...")
+    predictions = []
+    for idx in range(len(unparallel_data[src_col])):
+        src = unparallel_data[src_col].values[idx]
+        src_tknz = tokenizer(src, truncation=True, padding=True, max_length=args.max_length, return_tensors='pt')
+        generated_ids = model.generate(src_tknz["input_ids"].cuda(), max_length=args.max_length)
+        prediction = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        predictions.append(prediction)
+
+    data_pairs = pd.DataFrame({
+            'pos': unparallel_data[src_col].values.tolist(),
+            'neg': remove_prefix(predictions, 'NEG: ')
+    })
+    data_pairs.to_csv(synthetic_train_file, index=False)
+    print(f"✅ Synthetic train data written to {synthetic_train_file} — {len(data_pairs)} pairs")
+
 
 def write_evaluation_results(acc, bleu_withsrc, bleu_withtrg, sim, gpt2_ppl, filepath):
     with open(filepath, 'w') as file:
