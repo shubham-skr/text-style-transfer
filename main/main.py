@@ -107,6 +107,90 @@ def generate_synthetic_data(model, unparallel_data, src_col, tokenizer, syntheti
     print(f"✅ Synthetic train data written to {synthetic_train_file} — {len(data_pairs)} pairs")
 
 
+def compute_scores_for_synthetic_pairs(sources, preds, evaluator, target_label="NEGATIVE"):
+    """
+    Computes style probability, BLEU, and semantic similarity for each generated pair.
+    Returns: list of dicts [{src,pred,style_prob,bleu,sim}]
+    """
+    print(f"🔄 Computing scores for synthetic pairs...")
+    sent_pipe = evaluator.sentiment_analysis
+    sim_model = evaluator.sim_model
+    out = []
+    for src, pred in tqdm(zip(sources, preds), total=len(preds), desc="Scoring pairs"):
+        # 1️⃣ Style probability
+        res = sent_pipe(pred)[0]
+        prob = res['score']
+        if res['label'] != target_label:
+            style_prob = 1.0 - prob
+        else:
+            style_prob = prob
+
+        # 2️⃣ BLEU (sentence-level vs source)
+        bleu_vs_src = sacrebleu.sentence_bleu(pred, [src]).score / 100.0  # normalized 0–1
+
+        # 3️⃣ Semantic similarity
+        emb = sim_model.encode([src, pred])
+        cos_sim = float(np.dot(emb[0], emb[1]) / (np.linalg.norm(emb[0]) * np.linalg.norm(emb[1]) + 1e-9))
+        sim_norm = (cos_sim + 1.0) / 2.0
+
+        out.append({
+            'src': src,
+            'pred': pred,
+            'style_prob': float(style_prob),
+            'bleu': float(bleu_vs_src),
+            'sim': float(sim_norm)
+        })
+    print(f"✅ Computer scores for the synthetic train data data.")
+    return out
+
+
+def compute_filtered_score(item, style_thresh=0.9):
+    style_prob = item['style_prob']
+    bleu = item['bleu']
+    sim = item['sim']
+
+    # 1️⃣ Filter out weak style transfers
+    if style_prob < style_thresh:
+        return 0.0
+    
+    # 2️⃣ Reward both semantic + structural similarity equally
+    content_score = (bleu + sim) / 2.0
+    
+    # 3️⃣ Slightly emphasize very confident style transfers
+    return float(content_score * (style_prob ** 1.5))
+
+
+def add_scores_and_select(scored_list, top_k, high_thresh=5.5, low_thresh=5.0):
+    """
+    scored_list: list of dicts with keys ['style_prob', 'bleu', 'sim']
+    top_k: number of examples to finally keep
+    high_thresh: first (strict) threshold
+    low_thresh: fallback threshold if too few examples above high_thresh
+
+    Returns selected list sorted by score desc.
+    """
+    # Compute scores for all examples
+    for it in scored_list:
+        it['score'] = compute_filtered_score(it)
+
+    # Sort descending by score
+    scored_list.sort(key=lambda x: x['score'], reverse=True)
+
+    # 1️⃣ Try selecting items above high threshold
+    high_selected = [x for x in scored_list if x['score'] >= high_thresh]
+
+    if len(high_selected) >= top_k:
+        # We have enough high-quality examples
+        return high_selected[:top_k]
+
+    # 2️⃣ Not enough high-score examples → relax threshold
+    low_selected = [x for x in scored_list if x['score'] >= low_thresh]
+
+    # Return whichever is smaller (to avoid overshooting top_k)
+    return low_selected[:min(len(low_selected), top_k)]
+
+
+
 def write_evaluation_results(acc, bleu_withsrc, bleu_withtrg, sim, gpt2_ppl, filepath):
     with open(filepath, 'w') as file:
         file.write('Accuracy: ' + str(acc) + '\n')
