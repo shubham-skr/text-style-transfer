@@ -51,3 +51,15 @@ test_df.to_pickle("/content/text-style-transfer/data/test.pkl")
 
 print("Wrote data/train.csv, data/dev.csv, data/test.pkl")
 print("Train size:", len(train_df), "Dev size:", len(dev_df), "Test size:", len(test_df))
+
+
+# Unparallel Data
+unparallel_ref1_path = "/content/Sentiment-and-Style-Transfer/data/yelp/sentiment.dev.1"  #
+lines = []
+with open(unparallel_ref1_path, 'r', encoding='utf-8') as f:
+    lines = [ln.strip() for ln in f if ln.strip()]
+print("Total unparallel lines:", len(lines))
+
+unparallel_data_df = pd.DataFrame({'pos': lines})
+unparallel_data_df.to_pickle("/content/text-style-transfer/data/unparallel.pkl")
+print("Wrote data/unparallel.pkl")
